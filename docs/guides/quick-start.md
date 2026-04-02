@@ -34,7 +34,7 @@ sudo mv ats /usr/local/bin/
 Or build from source:
 
 ```bash
-cd ~/projects/tooling-scripts/ats
+cd ~/projects/tooling-scripts/atlax-tools
 make build
 sudo mv bin/ats /usr/local/bin/
 ```
