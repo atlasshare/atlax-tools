@@ -90,6 +90,10 @@ func runHealth(cmd *cobra.Command, args []string) error {
 				return checkCertExpiry(relayCfg.TLS.CertFile, 30)
 			})
 
+			check("Relay cert is chain (not bare leaf)", func() error {
+				return checkChainCert(relayCfg.TLS.CertFile)
+			})
+
 			// Check listener
 			check("Agent listener responding", func() error {
 				parts := strings.SplitN(relayCfg.Server.ListenAddr, ":", 2)
@@ -187,6 +191,10 @@ func runHealth(cmd *cobra.Command, args []string) error {
 				return checkCertExpiry(agentCfg.TLS.CertFile, 30)
 			})
 
+			check("Agent cert is chain (not bare leaf)", func() error {
+				return checkChainCert(agentCfg.TLS.CertFile)
+			})
+
 			// Check relay connectivity
 			check("Relay reachable", func() error {
 				conn, err := net.DialTimeout("tcp", agentCfg.Relay.Addr, 5*time.Second)
@@ -263,6 +271,37 @@ func checkCertExpiry(certPath string, thresholdDays int) error {
 	}
 	if daysLeft <= thresholdDays {
 		return fmt.Errorf("WARN: expires in %d days (CN=%s)", daysLeft, cert.Subject.CommonName)
+	}
+	return nil
+}
+
+func checkChainCert(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	count := 0
+	rest := data
+	for {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			count++
+		}
+	}
+	if count == 0 {
+		return fmt.Errorf("no certificates found in %s", path)
+	}
+	if count == 1 {
+		return fmt.Errorf(
+			"%s contains a single certificate (bare leaf). "+
+				"atlax requires a chain cert (leaf + intermediate CA). "+
+				"Use `ats certs init` or run: cat leaf.crt intermediate.crt > chain.crt",
+			path,
+		)
 	}
 	return nil
 }
