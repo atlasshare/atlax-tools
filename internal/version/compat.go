@@ -10,9 +10,16 @@ import (
 	"strings"
 )
 
-const (
-	ToolVersion = "0.1.0"
+// ToolVersion is the ats CLI version. Overridden by ldflags at build time.
+var ToolVersion = "0.1.0-dev"
 
+// BuildCommit is the git commit hash. Set by ldflags at build time.
+var BuildCommit = "unknown"
+
+// BuildDate is the build timestamp. Set by ldflags at build time.
+var BuildDate = "unknown"
+
+const (
 	// Minimum atlax binary version this tool supports.
 	MinAtlaxMajor = 0
 	MinAtlaxMinor = 1

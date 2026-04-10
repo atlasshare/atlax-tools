@@ -2,10 +2,13 @@ package cli
 
 import (
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -54,6 +57,17 @@ func runSetupRelay(cmd *cobra.Command, args []string) error {
 	// Step 3: Server settings
 	listenAddr := tui.Ask("Agent listener address (mTLS)", "0.0.0.0:8443")
 	adminAddr := tui.Ask("Admin/metrics address", "127.0.0.1:9090")
+
+	// E6: warn if admin_addr port is already in use (catches Prometheus conflict)
+	if _, port, err := net.SplitHostPort(adminAddr); err == nil {
+		ln, listenErr := net.Listen("tcp", "127.0.0.1:"+port)
+		if listenErr != nil {
+			tui.Warnf("Port %s is already in use on localhost. If Prometheus is running on the same port, change one of them to avoid a bind conflict.", port)
+		} else {
+			ln.Close()
+		}
+	}
+
 	maxAgents := tui.AskInt("Max concurrent agents", 100)
 	maxStreams := tui.AskInt("Max streams per agent", 100)
 
@@ -90,6 +104,12 @@ func runSetupRelay(cmd *cobra.Command, args []string) error {
 
 	// Step 6: Firewall
 	tui.Header("Step 5: Firewall")
+
+	// E4 part 2: detect cloud environment and warn about two-layer firewall
+	if isCloudVM() {
+		tui.Warnf("This appears to be a cloud VM. Remember that BOTH the cloud security group AND the host firewall (UFW/firewalld) must allow each port. Check both layers when debugging connectivity issues.")
+	}
+
 	configureFW := tui.Confirm("Configure firewall rules?", true)
 	configureAWS := tui.Confirm("Print AWS Security Group commands?", false)
 	var awsSGID, awsRegion string
@@ -885,4 +905,23 @@ func downloadFile(url, dest string) error {
 		return cmd.Run()
 	}
 	return fmt.Errorf("neither curl nor wget found — install one and retry")
+}
+
+// isCloudVM tries to reach the AWS/GCP/Azure instance metadata endpoint.
+// Returns true if any responds within 500ms, indicating a cloud VM.
+func isCloudVM() bool {
+	endpoints := []string{
+		"http://169.254.169.254/latest/meta-data/",  // AWS
+		"http://metadata.google.internal/",           // GCP
+		"http://169.254.169.254/metadata/instance",   // Azure
+	}
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	for _, ep := range endpoints {
+		resp, err := client.Get(ep) //nolint:noctx // fire-and-forget probe
+		if err == nil {
+			resp.Body.Close()
+			return true
+		}
+	}
+	return false
 }
