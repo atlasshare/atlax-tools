@@ -137,6 +137,29 @@ Pre-existing lint issues in unrelated packages (`internal/cli`,
 `internal/caddy`, `internal/logger`, `internal/platform`) were not
 introduced by this work and are out of scope for G2.
 
+## Self-review findings addressed
+
+Two edge cases in the tag parser were tightened after the initial
+green build (commit `ddfc5ee`):
+
+1. Tag extraction switched from an ad-hoc `strings.Split` to
+   `reflect.StructTag.Get("yaml")`, which is the canonical stdlib
+   parser and handles tabs, multiple spaces, and multi-key tags
+   correctly.
+2. The `yaml:"-"` skip directive check was narrowed from
+   `HasPrefix(tag, "-")` to exact `yamlName == "-"` so a legitimate
+   (if unusual) field whose YAML key starts with a hyphen is not
+   incorrectly dropped.
+
+No agent-based review was run -- the `go-reviewer` and
+`security-reviewer` agents are not available in this environment.
+Self-review covered the domains the task called out: AST walking
+correctness, anonymous and grouped fields, multiline struct tags,
+fields without YAML tags, and the `--community-path` flag surface
+(stat-guarded, extension-checked, `filepath.Clean`-normalised).
+Risk remains low because the tool runs in CI, not as an exposed
+service.
+
 ## Commits
 
 1. `f1be7ef` `fix(config): add AdminSocket and ShutdownGracePeriod to RelayServer mirror`
@@ -144,8 +167,10 @@ introduced by this work and are out of scope for G2.
 3. `75d6e6f` `fix(config): close remaining drift detected by driftcheck`
 4. `ca1fb93` `style(driftcheck): explicitly discard fmt.Fprintf return values`
 5. `0154f6e` `ci: add drift-check job to detect config struct divergence`
+6. `933521d` `docs: add phase3 step8 g2 driftcheck step report`
+7. `ddfc5ee` `refactor(driftcheck): use reflect.StructTag.Get for tag extraction`
 
-Commit 4 is a small cleanup for `errcheck`, kept as its own commit per
+Commits 4 and 7 are small cleanups kept as their own commits per
 repository convention (no amends on committed history).
 
 ## Files created
