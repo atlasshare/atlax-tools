@@ -27,6 +27,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -228,14 +229,17 @@ func extractFields(st *ast.StructType) []Field {
 			continue
 		}
 		tag := yamlTag(f.Tag)
-		if tag == "" || strings.HasPrefix(tag, "-") {
+		if tag == "" {
 			continue
 		}
 		yamlName := tag
 		if i := strings.Index(tag, ","); i >= 0 {
 			yamlName = tag[:i]
 		}
-		if yamlName == "" {
+		// yaml:"-" means skip. yaml:"-,..." is also a skip directive in
+		// gopkg.in/yaml.v3. Anything else starting with "-" would be a
+		// legitimate (if odd) YAML key, so compare exactly.
+		if yamlName == "-" || yamlName == "" {
 			continue
 		}
 		for _, n := range f.Names {
@@ -250,38 +254,23 @@ func extractFields(st *ast.StructType) []Field {
 }
 
 // yamlTag extracts the yaml tag contents from a struct tag literal, or
-// empty string if absent. Handles the BasicLit `...` raw form that the
-// parser stores struct tags in.
+// empty string if absent. Uses reflect.StructTag.Get which is the
+// canonical Go stdlib parser for struct tags and handles multi-key
+// tags, multiple spaces, and tabs correctly.
 func yamlTag(lit *ast.BasicLit) string {
 	if lit == nil {
 		return ""
 	}
 	raw := lit.Value
-	// Struct tags are stored as raw backtick strings; strip surrounding
-	// backticks or double quotes the parser may hand us.
-	if len(raw) >= 2 && (raw[0] == '`' || raw[0] == '"') {
-		raw = raw[1 : len(raw)-1]
+	// ast stores tag literals with the surrounding backticks or double
+	// quotes. reflect.StructTag expects the unquoted form.
+	if len(raw) >= 2 {
+		first, last := raw[0], raw[len(raw)-1]
+		if (first == '`' && last == '`') || (first == '"' && last == '"') {
+			raw = raw[1 : len(raw)-1]
+		}
 	}
-	// Find yaml:"..." within the tag.
-	// reflect.StructTag.Get is the canonical parser; rather than import
-	// reflect for a trivial lookup, we split by spaces and look up the key.
-	for _, part := range strings.Split(raw, " ") {
-		part = strings.TrimSpace(part)
-		if !strings.HasPrefix(part, "yaml:") {
-			continue
-		}
-		v := strings.TrimPrefix(part, "yaml:")
-		if len(v) < 2 || v[0] != '"' {
-			return ""
-		}
-		// Trim surrounding double quotes from yaml:"...".
-		v = v[1:]
-		if end := strings.LastIndex(v, "\""); end >= 0 {
-			v = v[:end]
-		}
-		return v
-	}
-	return ""
+	return reflect.StructTag(raw).Get("yaml")
 }
 
 // compareMapped walks the mapping and records findings.
