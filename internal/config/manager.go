@@ -40,10 +40,18 @@ type RelayTLS struct {
 }
 
 type Customer struct {
-	ID             string       `yaml:"id"`
-	MaxConnections int          `yaml:"max_connections,omitempty"`
-	MaxStreams     int          `yaml:"max_streams,omitempty"`
-	Ports          []PortConfig `yaml:"ports"`
+	ID               string          `yaml:"id"`
+	MaxConnections   int             `yaml:"max_connections,omitempty"`
+	MaxStreams       int             `yaml:"max_streams,omitempty"`
+	MaxBandwidthMbps int             `yaml:"max_bandwidth_mbps,omitempty"`
+	RateLimit        RateLimitConfig `yaml:"rate_limit,omitempty"`
+	Ports            []PortConfig    `yaml:"ports"`
+}
+
+// RateLimitConfig mirrors the community per-customer request-rate limit.
+type RateLimitConfig struct {
+	RequestsPerSecond float64 `yaml:"requests_per_second"`
+	Burst             int     `yaml:"burst"`
 }
 
 type PortConfig struct {
@@ -54,9 +62,10 @@ type PortConfig struct {
 }
 
 type MetricsConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Path    string `yaml:"path,omitempty"`
-	Prefix  string `yaml:"prefix,omitempty"`
+	Enabled    bool   `yaml:"enabled"`
+	ListenAddr string `yaml:"listen_addr,omitempty"`
+	Path       string `yaml:"path,omitempty"`
+	Prefix     string `yaml:"prefix,omitempty"`
 }
 
 // --- Agent config structures ---
@@ -72,6 +81,7 @@ type AgentConfig struct {
 type AgentRelay struct {
 	Addr                string `yaml:"addr"`
 	ServerName          string `yaml:"server_name"`
+	InsecureSkipVerify  bool   `yaml:"insecure_skip_verify,omitempty"`
 	ReconnectInterval   string `yaml:"reconnect_interval,omitempty"`
 	ReconnectMaxBackoff string `yaml:"reconnect_max_backoff,omitempty"`
 	ReconnectJitter     bool   `yaml:"reconnect_jitter,omitempty"`
@@ -80,27 +90,31 @@ type AgentRelay struct {
 }
 
 type AgentTLS struct {
-	CertFile string `yaml:"cert_file"`
-	KeyFile  string `yaml:"key_file"`
-	CAFile   string `yaml:"ca_file"`
+	CertFile     string `yaml:"cert_file"`
+	KeyFile      string `yaml:"key_file"`
+	CAFile       string `yaml:"ca_file"`
+	ClientCAFile string `yaml:"client_ca_file,omitempty"`
 }
 
 type ServiceConfig struct {
 	Name        string `yaml:"name"`
-	LocalAddr   string `yaml:"local_addr"`
 	Protocol    string `yaml:"protocol"`
+	LocalAddr   string `yaml:"local_addr"`
+	RelayPort   int    `yaml:"relay_port,omitempty"`
 	Description string `yaml:"description,omitempty"`
 }
 
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
+	Output string `yaml:"output,omitempty"`
 }
 
 type UpdateConfig struct {
 	Enabled       bool   `yaml:"enabled"`
 	CheckInterval string `yaml:"check_interval,omitempty"`
 	ManifestURL   string `yaml:"manifest_url,omitempty"`
+	PublicKeyPath string `yaml:"public_key_path,omitempty"`
 }
 
 // --- Read / Write ---
