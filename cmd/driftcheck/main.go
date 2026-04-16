@@ -107,7 +107,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	findings, err := runDriftCheck(*community, *tools, productionMapping())
 	if err != nil {
-		fmt.Fprintf(stderr, "driftcheck: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "driftcheck: %v\n", err)
 		return 2
 	}
 	printReport(stdout, *community, *tools, findings)
@@ -397,12 +397,15 @@ func compareFields(cStruct, tStruct string, c, t []Field) []Finding {
 // printReport writes a human-readable summary. Errors first, warnings
 // after, with a trailing one-line summary that CI logs can grep.
 func printReport(w io.Writer, communityPath, toolsPath string, findings []Finding) {
-	fmt.Fprintf(w, "driftcheck\n")
-	fmt.Fprintf(w, "  community: %s\n", communityPath)
-	fmt.Fprintf(w, "  tools:     %s\n", toolsPath)
+	out := func(format string, args ...any) {
+		_, _ = fmt.Fprintf(w, format, args...)
+	}
+	out("driftcheck\n")
+	out("  community: %s\n", communityPath)
+	out("  tools:     %s\n", toolsPath)
 
 	if len(findings) == 0 {
-		fmt.Fprintf(w, "result: OK (no drift detected)\n")
+		out("result: OK (no drift detected)\n")
 		return
 	}
 
@@ -423,16 +426,16 @@ func printReport(w io.Writer, communityPath, toolsPath string, findings []Findin
 	for _, f := range sorted {
 		if f.severity() == severityError {
 			errCount++
-			fmt.Fprintf(w, "  [ERROR] %s\n", formatFinding(f))
+			out("  [ERROR] %s\n", formatFinding(f))
 		} else {
 			warnCount++
-			fmt.Fprintf(w, "  [WARN]  %s\n", formatFinding(f))
+			out("  [WARN]  %s\n", formatFinding(f))
 		}
 	}
 	if errCount > 0 {
-		fmt.Fprintf(w, "result: DRIFT (%d error, %d warning)\n", errCount, warnCount)
+		out("result: DRIFT (%d error, %d warning)\n", errCount, warnCount)
 	} else {
-		fmt.Fprintf(w, "result: OK (%d warning, no errors)\n", warnCount)
+		out("result: OK (%d warning, no errors)\n", warnCount)
 	}
 }
 
