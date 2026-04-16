@@ -23,10 +23,13 @@ type RelayConfig struct {
 type RelayServer struct {
 	ListenAddr          string `yaml:"listen_addr"`
 	AdminAddr           string `yaml:"admin_addr"`
+	AdminSocket         string `yaml:"admin_socket"`
+	AgentListenAddr     string `yaml:"agent_listen_addr"`
 	MaxAgents           int    `yaml:"max_agents"`
-	MaxStreamsPerAgent   int    `yaml:"max_streams_per_agent"`
+	MaxStreamsPerAgent  int    `yaml:"max_streams_per_agent"`
 	IdleTimeout         string `yaml:"idle_timeout"`
 	ShutdownGracePeriod string `yaml:"shutdown_grace_period"`
+	StorePath           string `yaml:"store_path"`
 }
 
 type RelayTLS struct {
@@ -39,7 +42,7 @@ type RelayTLS struct {
 type Customer struct {
 	ID             string       `yaml:"id"`
 	MaxConnections int          `yaml:"max_connections,omitempty"`
-	MaxStreams      int          `yaml:"max_streams,omitempty"`
+	MaxStreams     int          `yaml:"max_streams,omitempty"`
 	Ports          []PortConfig `yaml:"ports"`
 }
 
@@ -59,21 +62,21 @@ type MetricsConfig struct {
 // --- Agent config structures ---
 
 type AgentConfig struct {
-	Relay    AgentRelay    `yaml:"relay"`
-	TLS      AgentTLS      `yaml:"tls"`
+	Relay    AgentRelay      `yaml:"relay"`
+	TLS      AgentTLS        `yaml:"tls"`
 	Services []ServiceConfig `yaml:"services"`
-	Logging  LoggingConfig `yaml:"logging"`
-	Update   *UpdateConfig `yaml:"update,omitempty"`
+	Logging  LoggingConfig   `yaml:"logging"`
+	Update   *UpdateConfig   `yaml:"update,omitempty"`
 }
 
 type AgentRelay struct {
-	Addr               string `yaml:"addr"`
-	ServerName         string `yaml:"server_name"`
-	ReconnectInterval  string `yaml:"reconnect_interval,omitempty"`
+	Addr                string `yaml:"addr"`
+	ServerName          string `yaml:"server_name"`
+	ReconnectInterval   string `yaml:"reconnect_interval,omitempty"`
 	ReconnectMaxBackoff string `yaml:"reconnect_max_backoff,omitempty"`
-	ReconnectJitter    bool   `yaml:"reconnect_jitter,omitempty"`
-	KeepaliveInterval  string `yaml:"keepalive_interval"`
-	KeepaliveTimeout   string `yaml:"keepalive_timeout"`
+	ReconnectJitter     bool   `yaml:"reconnect_jitter,omitempty"`
+	KeepaliveInterval   string `yaml:"keepalive_interval"`
+	KeepaliveTimeout    string `yaml:"keepalive_timeout"`
 }
 
 type AgentTLS struct {
@@ -250,7 +253,7 @@ func DefaultRelayConfig() *RelayConfig {
 			ListenAddr:          "0.0.0.0:8443",
 			AdminAddr:           "127.0.0.1:9090",
 			MaxAgents:           100,
-			MaxStreamsPerAgent:   100,
+			MaxStreamsPerAgent:  100,
 			IdleTimeout:         "300s",
 			ShutdownGracePeriod: "30s",
 		},
