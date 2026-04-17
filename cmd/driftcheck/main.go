@@ -12,7 +12,7 @@
 //
 // Exit codes:
 //
-//	0 -- no drift, or only ExtraInTools warnings
+//	0 -- no drift, or only ExtraInTools/TagOptionsMismatch warnings
 //	1 -- at least one MissingStruct, MissingField, or TagMismatch finding
 //	2 -- usage or parse error
 package main
@@ -51,6 +51,9 @@ const (
 	KindTagMismatch
 	// KindExtraInTools: tools struct has a YAML field community lacks.
 	KindExtraInTools
+	// KindTagOptionsMismatch: same field name and YAML base name, but tag
+	// options differ (e.g. omitempty present in one but not the other).
+	KindTagOptionsMismatch
 )
 
 type severity int
@@ -72,7 +75,7 @@ type Finding struct {
 }
 
 func (f Finding) severity() severity {
-	if f.Kind == KindExtraInTools {
+	if f.Kind == KindExtraInTools || f.Kind == KindTagOptionsMismatch {
 		return severityWarn
 	}
 	return severityError
@@ -360,6 +363,20 @@ func compareFields(cStruct, tStruct string, c, t []Field) []Finding {
 				ToolsTag:        tf.Tag,
 				Detail:          "yaml tag differs between community and tools",
 			})
+		} else if tf.Tag != cf.Tag {
+			// Base YAML name matches but full tag string differs (e.g.
+			// omitempty present in one but not the other). This is a
+			// warning, not an error -- tools may intentionally add
+			// omitempty for cleaner YAML output.
+			findings = append(findings, Finding{
+				Kind:            KindTagOptionsMismatch,
+				CommunityStruct: cStruct,
+				ToolsStruct:     tStruct,
+				Field:           cf.Name,
+				CommunityTag:    cf.Tag,
+				ToolsTag:        tf.Tag,
+				Detail:          "yaml tag options differ between community and tools",
+			})
 		}
 	}
 
@@ -445,6 +462,9 @@ func formatFinding(f Finding) string {
 	case KindExtraInTools:
 		return fmt.Sprintf("tools-only field: %s.%s (tag %q, community %s)",
 			f.ToolsStruct, f.Field, f.ToolsTag, f.CommunityStruct)
+	case KindTagOptionsMismatch:
+		return fmt.Sprintf("tag options mismatch: %s.%s community=%q tools=%q",
+			f.ToolsStruct, f.Field, f.CommunityTag, f.ToolsTag)
 	default:
 		return f.Detail
 	}

@@ -321,6 +321,49 @@ type RelayServer struct {
 	}
 }
 
+func TestCompare_OmitemptyDivergence(t *testing.T) {
+	dir := t.TempDir()
+	community := writeFile(t, dir, "community.go", `package config
+type ServerConfig struct {
+	ListenAddr string `+"`yaml:\"listen_addr\"`"+`
+	MaxAgents  int    `+"`yaml:\"max_agents\"`"+`
+}
+`)
+	tools := writeFile(t, dir, "tools.go", `package config
+type RelayServer struct {
+	ListenAddr string `+"`yaml:\"listen_addr\"`"+`
+	MaxAgents  int    `+"`yaml:\"max_agents,omitempty\"`"+`
+}
+`)
+	findings, err := runDriftCheck(community, tools, defaultMapping())
+	if err != nil {
+		t.Fatalf("runDriftCheck: %v", err)
+	}
+	var mismatch *Finding
+	for i := range findings {
+		if findings[i].Kind == KindTagOptionsMismatch && findings[i].Field == "MaxAgents" {
+			mismatch = &findings[i]
+			break
+		}
+	}
+	if mismatch == nil {
+		t.Fatalf("expected TagOptionsMismatch for MaxAgents, got: %+v", findings)
+	}
+	if mismatch.CommunityTag != "max_agents" {
+		t.Errorf("want community tag %q, got %q", "max_agents", mismatch.CommunityTag)
+	}
+	if mismatch.ToolsTag != "max_agents,omitempty" {
+		t.Errorf("want tools tag %q, got %q", "max_agents,omitempty", mismatch.ToolsTag)
+	}
+	if mismatch.severity() != severityWarn {
+		t.Errorf("TagOptionsMismatch should be warning, got severity %v", mismatch.severity())
+	}
+	// Should still exit 0 -- omitempty divergence is not an error.
+	if hasErrors(findings) {
+		t.Errorf("omitempty divergence should not trip failure: %+v", findings)
+	}
+}
+
 func TestRunDriftCheck_FailsOnParseError(t *testing.T) {
 	dir := t.TempDir()
 	bad := writeFile(t, dir, "bad.go", `package config
