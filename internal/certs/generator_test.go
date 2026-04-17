@@ -3,13 +3,13 @@ package certs
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -25,21 +25,56 @@ import (
 // If a real OpenSSL (>= 1.1) is available via Homebrew or on PATH, we
 // prepend it. Otherwise these integration-style tests are skipped.
 //
-// This is strictly a test-environment adjustment — production hosts are
+// This is strictly a test-environment adjustment -- production hosts are
 // Linux and ship real OpenSSL.
 
 var (
-	sharedPKIOnce sync.Once
-	sharedPKIDir  string
-	sharedPKIErr  error
+	sharedPKIDir string
+	sharedPKIErr error
 )
 
-// ensureRealOpenSSL returns a PATH value that places a non-LibreSSL
+// TestMain sets up the shared PKI directory once for the entire test
+// binary, properly cleaning up the temp directory and restoring PATH
+// when done.
+func TestMain(m *testing.M) {
+	origPath := os.Getenv("PATH")
+
+	newPath := detectOpenSSLPath()
+	if newPath != "" {
+		os.Setenv("PATH", newPath)
+
+		dir, err := os.MkdirTemp("", "atlax-certs-shared-")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
+			os.Exit(1)
+		}
+
+		opts := DefaultOpts()
+		opts.OutputDir = dir
+		opts.Backend = OpenSSL
+		if err := GenerateFullPKI(opts); err != nil {
+			sharedPKIErr = err
+		} else {
+			sharedPKIDir = dir
+		}
+
+		code := m.Run()
+		os.RemoveAll(dir)
+		os.Setenv("PATH", origPath)
+		os.Exit(code)
+	}
+
+	// No GNU OpenSSL available -- run tests anyway (PKI tests will skip).
+	code := m.Run()
+	os.Setenv("PATH", origPath)
+	os.Exit(code)
+}
+
+// detectOpenSSLPath returns a PATH value that places a non-LibreSSL
 // openssl first, or the empty string if none is available.
-func ensureRealOpenSSL(t *testing.T) string {
-	t.Helper()
+func detectOpenSSLPath() string {
 	// 1. If the current openssl on PATH is already real OpenSSL, no-op.
-	if isGNUOpenSSL(t, "openssl") {
+	if isGNUOpenSSLBin("openssl") {
 		return os.Getenv("PATH")
 	}
 
@@ -55,7 +90,7 @@ func ensureRealOpenSSL(t *testing.T) string {
 			if _, err := os.Stat(candidate); err != nil {
 				continue
 			}
-			if isGNUOpenSSL(t, candidate) {
+			if isGNUOpenSSLBin(candidate) {
 				return prefix + string(os.PathListSeparator) + os.Getenv("PATH")
 			}
 		}
@@ -63,8 +98,7 @@ func ensureRealOpenSSL(t *testing.T) string {
 	return ""
 }
 
-func isGNUOpenSSL(t *testing.T, bin string) bool {
-	t.Helper()
+func isGNUOpenSSLBin(bin string) bool {
 	out, err := exec.Command(bin, "version").CombinedOutput()
 	if err != nil {
 		return false
@@ -72,45 +106,14 @@ func isGNUOpenSSL(t *testing.T, bin string) bool {
 	return !strings.Contains(string(out), "LibreSSL")
 }
 
-// sharedPKI returns the path to a directory containing a full PKI
-// generated once for the test binary. Skips the calling test if no
-// real OpenSSL is available.
+// sharedPKI returns the path to the shared PKI directory. Skips the
+// calling test if no real OpenSSL is available or PKI generation failed.
 func sharedPKI(t *testing.T) string {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("skipping OpenSSL-based PKI tests in -short mode")
 	}
-
-	sharedPKIOnce.Do(func() {
-		newPath := ensureRealOpenSSL(t)
-		if newPath == "" {
-			sharedPKIErr = errSkip
-			return
-		}
-		// Persist for the life of the test binary.
-		_ = os.Setenv("PATH", newPath)
-
-		dir, err := os.MkdirTemp("", "atlax-certs-shared-")
-		if err != nil {
-			sharedPKIErr = err
-			return
-		}
-		// Smaller keys keep the full run under a few seconds while still
-		// producing genuine x509 PEM output. We do this by overriding
-		// OpenSSL config via env; however the shelled-out commands hard
-		// code rsa:4096 so we just accept the cost — but only once for
-		// the whole binary.
-		opts := DefaultOpts()
-		opts.OutputDir = dir
-		opts.Backend = OpenSSL
-		if err := GenerateFullPKI(opts); err != nil {
-			sharedPKIErr = err
-			return
-		}
-		sharedPKIDir = dir
-	})
-
-	if sharedPKIErr == errSkip {
+	if sharedPKIDir == "" && sharedPKIErr == nil {
 		t.Skip("no real OpenSSL available; skipping PKI generation tests")
 	}
 	if sharedPKIErr != nil {
@@ -118,14 +121,6 @@ func sharedPKI(t *testing.T) string {
 	}
 	return sharedPKIDir
 }
-
-// errSkip is a sentinel used only inside this test file to distinguish
-// "skip" from "setup failure" in a sync.Once-captured error.
-var errSkip = skipErr{}
-
-type skipErr struct{}
-
-func (skipErr) Error() string { return "skip" }
 
 // --- helpers -------------------------------------------------------------
 
