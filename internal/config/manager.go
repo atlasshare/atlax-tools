@@ -23,10 +23,13 @@ type RelayConfig struct {
 type RelayServer struct {
 	ListenAddr          string `yaml:"listen_addr"`
 	AdminAddr           string `yaml:"admin_addr"`
+	AdminSocket         string `yaml:"admin_socket"`
+	AgentListenAddr     string `yaml:"agent_listen_addr"`
 	MaxAgents           int    `yaml:"max_agents"`
-	MaxStreamsPerAgent   int    `yaml:"max_streams_per_agent"`
+	MaxStreamsPerAgent  int    `yaml:"max_streams_per_agent"`
 	IdleTimeout         string `yaml:"idle_timeout"`
 	ShutdownGracePeriod string `yaml:"shutdown_grace_period"`
+	StorePath           string `yaml:"store_path"`
 }
 
 type RelayTLS struct {
@@ -37,10 +40,18 @@ type RelayTLS struct {
 }
 
 type Customer struct {
-	ID             string       `yaml:"id"`
-	MaxConnections int          `yaml:"max_connections,omitempty"`
-	MaxStreams      int          `yaml:"max_streams,omitempty"`
-	Ports          []PortConfig `yaml:"ports"`
+	ID               string          `yaml:"id"`
+	MaxConnections   int             `yaml:"max_connections,omitempty"`
+	MaxStreams       int             `yaml:"max_streams,omitempty"`
+	MaxBandwidthMbps int             `yaml:"max_bandwidth_mbps,omitempty"`
+	RateLimit        RateLimitConfig `yaml:"rate_limit,omitempty"`
+	Ports            []PortConfig    `yaml:"ports"`
+}
+
+// RateLimitConfig mirrors the community per-customer request-rate limit.
+type RateLimitConfig struct {
+	RequestsPerSecond float64 `yaml:"requests_per_second"`
+	Burst             int     `yaml:"burst"`
 }
 
 type PortConfig struct {
@@ -51,53 +62,64 @@ type PortConfig struct {
 }
 
 type MetricsConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Path    string `yaml:"path,omitempty"`
-	Prefix  string `yaml:"prefix,omitempty"`
+	Enabled    bool   `yaml:"enabled"`
+	ListenAddr string `yaml:"listen_addr,omitempty"`
+	Path       string `yaml:"path,omitempty"`
+	Prefix     string `yaml:"prefix,omitempty"`
 }
 
 // --- Agent config structures ---
 
 type AgentConfig struct {
-	Relay    AgentRelay    `yaml:"relay"`
-	TLS      AgentTLS      `yaml:"tls"`
+	Relay    AgentRelay      `yaml:"relay"`
+	TLS      AgentTLS        `yaml:"tls"`
 	Services []ServiceConfig `yaml:"services"`
-	Logging  LoggingConfig `yaml:"logging"`
-	Update   *UpdateConfig `yaml:"update,omitempty"`
+	Logging  LoggingConfig   `yaml:"logging"`
+	Update   *UpdateConfig   `yaml:"update,omitempty"`
 }
 
 type AgentRelay struct {
-	Addr               string `yaml:"addr"`
-	ServerName         string `yaml:"server_name"`
-	ReconnectInterval  string `yaml:"reconnect_interval,omitempty"`
+	Addr       string `yaml:"addr"`
+	ServerName string `yaml:"server_name"`
+	// InsecureSkipVerify mirrors the community config field. This field
+	// exists only for config struct parity with the community relay.
+	// Setting this to true disables TLS certificate verification and
+	// MUST NOT be used in production. The ats CLI should warn when this
+	// field is true in a loaded config.
+	InsecureSkipVerify  bool   `yaml:"insecure_skip_verify,omitempty"`
+	ReconnectInterval   string `yaml:"reconnect_interval,omitempty"`
 	ReconnectMaxBackoff string `yaml:"reconnect_max_backoff,omitempty"`
-	ReconnectJitter    bool   `yaml:"reconnect_jitter,omitempty"`
-	KeepaliveInterval  string `yaml:"keepalive_interval"`
-	KeepaliveTimeout   string `yaml:"keepalive_timeout"`
+	ReconnectJitter     bool   `yaml:"reconnect_jitter,omitempty"`
+	KeepaliveInterval   string `yaml:"keepalive_interval"`
+	KeepaliveTimeout    string `yaml:"keepalive_timeout"`
 }
 
 type AgentTLS struct {
-	CertFile string `yaml:"cert_file"`
-	KeyFile  string `yaml:"key_file"`
-	CAFile   string `yaml:"ca_file"`
+	CertFile     string `yaml:"cert_file"`
+	KeyFile      string `yaml:"key_file"`
+	CAFile       string `yaml:"ca_file"`
+	ClientCAFile string `yaml:"client_ca_file,omitempty"`
 }
 
 type ServiceConfig struct {
 	Name        string `yaml:"name"`
-	LocalAddr   string `yaml:"local_addr"`
 	Protocol    string `yaml:"protocol"`
+	LocalAddr   string `yaml:"local_addr"`
+	RelayPort   int    `yaml:"relay_port,omitempty"`
 	Description string `yaml:"description,omitempty"`
 }
 
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
+	Output string `yaml:"output,omitempty"`
 }
 
 type UpdateConfig struct {
 	Enabled       bool   `yaml:"enabled"`
 	CheckInterval string `yaml:"check_interval,omitempty"`
 	ManifestURL   string `yaml:"manifest_url,omitempty"`
+	PublicKeyPath string `yaml:"public_key_path,omitempty"`
 }
 
 // --- Read / Write ---
@@ -250,7 +272,7 @@ func DefaultRelayConfig() *RelayConfig {
 			ListenAddr:          "0.0.0.0:8443",
 			AdminAddr:           "127.0.0.1:9090",
 			MaxAgents:           100,
-			MaxStreamsPerAgent:   100,
+			MaxStreamsPerAgent:  100,
 			IdleTimeout:         "300s",
 			ShutdownGracePeriod: "30s",
 		},
