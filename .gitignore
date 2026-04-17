@@ -16,6 +16,10 @@ Thumbs.db
 
 # Go
 vendor/
+coverage.out
+coverage-certs.out
+*.cover
+*.coverprofile
 
 # Claude
 .claude/

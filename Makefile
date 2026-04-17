@@ -9,7 +9,7 @@ LDFLAGS = -s -w \
 	-X github.com/atlasshare/atlax-tools/internal/version.BuildCommit=$(COMMIT) \
 	-X github.com/atlasshare/atlax-tools/internal/version.BuildDate=$(DATE)
 
-.PHONY: build clean test lint install cross
+.PHONY: build clean test test-coverage test-coverage-certs lint install cross
 
 ## Build for current platform
 build:
@@ -22,6 +22,18 @@ install:
 ## Run tests
 test:
 	go test -race -count=1 ./...
+
+## Run tests with coverage gate (fails if coverage drops below 80%)
+## Excludes internal/certs which depends on GNU OpenSSL (external binary).
+test-coverage:
+	go test -race -count=1 -coverprofile=coverage.out \
+		./internal/config/... ./internal/tui/... ./internal/caddy/...
+	go tool cover -func=coverage.out | awk '/total/{if ($$3+0 < 80) {print "FAIL: coverage below 80%"; exit 1}}'
+
+## Run certs tests separately (requires GNU OpenSSL; no coverage gate)
+test-coverage-certs:
+	go test -race -count=1 -coverprofile=coverage-certs.out ./internal/certs/...
+	go tool cover -func=coverage-certs.out
 
 ## Run linter
 lint:
@@ -43,9 +55,11 @@ clean:
 ## Show help
 help:
 	@echo "Targets:"
-	@echo "  build    Build for current platform"
-	@echo "  install  Install to GOPATH/bin"
-	@echo "  test     Run tests"
-	@echo "  lint     Run linter"
-	@echo "  cross    Cross-compile for all platforms"
-	@echo "  clean    Remove build artifacts"
+	@echo "  build          Build for current platform"
+	@echo "  install        Install to GOPATH/bin"
+	@echo "  test           Run tests"
+	@echo "  test-coverage       Run tests with 80% coverage gate (excludes certs)"
+	@echo "  test-coverage-certs Run certs tests separately (needs GNU OpenSSL)"
+	@echo "  lint           Run linter"
+	@echo "  cross          Cross-compile for all platforms"
+	@echo "  clean          Remove build artifacts"
