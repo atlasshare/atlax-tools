@@ -79,8 +79,13 @@ type AgentConfig struct {
 }
 
 type AgentRelay struct {
-	Addr                string `yaml:"addr"`
-	ServerName          string `yaml:"server_name"`
+	Addr       string `yaml:"addr"`
+	ServerName string `yaml:"server_name"`
+	// InsecureSkipVerify mirrors the community config field. This field
+	// exists only for config struct parity with the community relay.
+	// Setting this to true disables TLS certificate verification and
+	// MUST NOT be used in production. The ats CLI should warn when this
+	// field is true in a loaded config.
 	InsecureSkipVerify  bool   `yaml:"insecure_skip_verify,omitempty"`
 	ReconnectInterval   string `yaml:"reconnect_interval,omitempty"`
 	ReconnectMaxBackoff string `yaml:"reconnect_max_backoff,omitempty"`
